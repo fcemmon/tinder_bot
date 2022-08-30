@@ -84,7 +84,7 @@ export default class TinderPage {
         const [response] = await Promise.all([
           this.page.waitForResponse(
             (response) => {
-              return response.url().includes("https://api.gotinder.com/v2/profile?");
+              return response.url().includes("https://api.gotinder.com/v2/profile?") && response.status() === 200;
             },
             { timeout: 30000 }
           ),
