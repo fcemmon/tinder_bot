@@ -367,6 +367,23 @@ export class SwipeJob {
     return await this.runQuery(query, [this.jobID]);
   }
 
+  async checkCancelledStatus() {
+    const query = `
+      SELECT status
+      FROM swipe_jobs
+      where id = $1`;
+    const res = await this.runQuery(query, [this.jobID]);
+    if (!res.rows[0]) {
+      return false;
+    } else {
+      if (res.rows[0].status === "cancelled") {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
   async markJobOutOfLikes() {
     const query = `
       UPDATE swipe_jobs
@@ -578,6 +595,12 @@ export class SwipeJob {
         if (likeCount) {
           await this.updateLikeCount(likeCount);
           // return;
+        }
+
+        const isCancelled = await this.checkCancelledStatus();
+        if (isCancelled) {
+          await this.markJobCancelled();
+          process.exit(0);
         }
       }
       await this.tp.dragAndDrop();
