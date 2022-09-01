@@ -438,7 +438,7 @@ export default class TinderPage {
 
   async goLikesYouPage() {
     try {
-      const matchesTab = await this.page.waitForSelector("div[role=tablist] > div > button", { timeout: 30000 });
+      const matchesTab = await this.page.waitForSelector("div[role=tablist] > div > button", { timeout: 60000 });
       console.log(await matchesTab.innerText(), "^^^^^^^^^^^^^^^^^^^^");
       matchesTab.click();
       const likesItem = await this.page.waitForSelector('a.matchListItem[href^="/app/likes-you"]', {
@@ -447,7 +447,7 @@ export default class TinderPage {
       await likesItem.click();
     } catch (error) {
       console.log(error);
-      throw new OutOfLikesError();
+      await this.navigateToLikesPage();
     }
   }
 
