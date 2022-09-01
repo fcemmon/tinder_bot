@@ -334,8 +334,21 @@ export default class TinderPage {
 
   // TODO rec specific
   async navigateToRecsPage(retries: number = 0) {
-    await this.page.setViewportSize({ width: 1024, height: 768 });
+    tlog("navigating to Recs");
     this.desiredURL = "https://tinder.com/app/recs";
+    this.page = await this.browserContext.newPage();
+    let pages = this.browserContext.pages();
+    const vis_results = await Promise.all(
+      pages.map(async (p: any, index: number) => {
+        if (pages.length - 1 === index) {
+          tlog("don't close tinder.com page");
+          this.page = p;
+          return;
+        }
+        tlog("closing tinder.com page");
+        p.close();
+      })
+    );
     await Promise.all([
       this.page.goto(this.desiredURL, { waitUntil: "networkidle", timeout: DEFAULT_TIMEOUT }),
       this.checkGoldProfile(),
