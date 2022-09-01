@@ -641,6 +641,12 @@ export class SwipeJob {
   async runRecommendedJob() {
     await this.tp.navigateToRecsPage();
     for (let i = 1; i <= this.swipes; i++) {
+      if (i % 200 === 0) {
+        await delay(2000);
+        if (this.tp.page !== undefined) {
+          await this.tp.navigateToRecsPage();
+        }
+      }
       await this.tp.checkAndHandleErrors();
       try {
         await this.tp.waitForGamepadLikes();
@@ -669,6 +675,12 @@ export class SwipeJob {
     // await this.tp.checkAndHandleErrors();
     for await (const x of Array(this.swipes)) {
       i = i + 1;
+      if (i % 200 === 0) {
+        await delay(2000);
+        if (this.tp.page !== undefined) {
+          await this.tp.navigateToRecsPage();
+        }
+      }
       await this.tp.checkAndHandleErrors();
       const random = Math.random();
       try {
