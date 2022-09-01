@@ -648,7 +648,14 @@ export class SwipeJob {
         await this.tp.checkAndHandleErrors();
       }
       await this.tp.clickPass();
-
+      if (i % 10 === 0) {
+        await delay(1000);
+        const isCancelled = await this.checkCancelledStatus();
+        if (isCancelled) {
+          await this.markJobCancelled();
+          process.exit(0);
+        }
+      }
       await this.incrementJobSwipesForRecommend();
       await delay(2000);
     }
@@ -678,6 +685,14 @@ export class SwipeJob {
         await this.tp.clickPass();
       }
 
+      if (i % 10 === 0) {
+        await delay(1000);
+        const isCancelled = await this.checkCancelledStatus();
+        if (isCancelled) {
+          await this.markJobCancelled();
+          process.exit(0);
+        }
+      }
       await this.incrementJobSwipes();
       await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
     }
