@@ -195,8 +195,10 @@ export class SwipeJob {
           await this.runLikesJob();
           break;
         case "recommended":
-        case "status_check":
           await this.runRecommendedJob();
+          break;
+        case "status_check":
+          await this.runStatusCheckJob();
           break;
         default:
           throw new Error("unknown job type");
@@ -616,8 +618,42 @@ export class SwipeJob {
     }
   }
 
+  async incrementJobSwipesForRecommend() {
+    await this.runQuery(
+      `
+      update swipe_jobs
+      set swipes = swipes + 1, swiped_at = timezone('utc', now())
+      where id = $1
+    `,
+      [this.jobID]
+    );
+    await this.runQuery(
+      `
+      update runs
+      set swipes = swipes + 1
+      where id = $1
+    `,
+      [this.runID]
+    );
+  }
+
   // move to tinderrecs
   async runRecommendedJob() {
+    await this.tp.navigateToRecsPage();
+    for (let i = 1; i <= this.swipes; i++) {
+      await this.tp.checkAndHandleErrors();
+      try {
+        await this.tp.waitForGamepadLikes();
+      } catch (e) {
+        await this.tp.checkAndHandleErrors();
+      }
+      await this.tp.clickPass();
+
+      await this.incrementJobSwipesForRecommend();
+      await delay(2000);
+    }
+  }
+  async runStatusCheckJob() {
     await this.tp.navigateToRecsPage();
 
     let i = 0;
