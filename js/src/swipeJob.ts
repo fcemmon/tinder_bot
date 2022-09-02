@@ -67,7 +67,7 @@ export class SwipeJob {
     this.options = options;
     this.options.verbose = true;
     this.swipesSinceLastMatch = 0;
-    this.shadowBanSwipeCount = 20;
+    this.shadowBanSwipeCount = 50;
     this.executionContextDestroyedCounter = 0;
   }
 
@@ -230,7 +230,7 @@ export class SwipeJob {
     `,
       [this.runID]
     );
-    // if more than 20 swipes have occured since last match, throw shadowbanned error
+    // if more than 50 swipes have occured since last match, throw shadowbanned error
     tlog("swipes since last match:", this.swipesSinceLastMatch);
 
     if (this.swipesSinceLastMatch >= this.shadowBanSwipeCount) {
