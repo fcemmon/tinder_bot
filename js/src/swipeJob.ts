@@ -61,6 +61,7 @@ export class SwipeJob {
   swipes!: number;
   delayVariance!: number;
   runID!: number;
+  currentSwipes!: number;
 
   constructor(jobID: number, options: any) {
     this.jobID = jobID;
@@ -93,6 +94,7 @@ export class SwipeJob {
           tinder_accounts.id tinder_acc_id,
           retries,
           job_type,
+          swipes,
           disable_images,
           tinder_accounts.status as account_status,
           gologin_profile_id,
@@ -128,6 +130,7 @@ export class SwipeJob {
     this.username = res.rows[0].username;
     this.userID = res.rows[0].user_id;
     this.swipes = res.rows[0].target;
+    this.currentSwipes = res.rows[0].swipes;
 
     if (this.jobType == "status_check") {
       this.swipes = this.shadowBanSwipeCount + 1;
@@ -141,7 +144,18 @@ export class SwipeJob {
 
     if (this.options.verbose) {
       tlog("START JOB ------------------");
-      tlog("\nType:", this.jobType, "\nid:", this.jobID, "\nprofile:", this.profileID, "\nswipes:", this.swipes);
+      tlog(
+        "\nType:",
+        this.jobType,
+        "\nid:",
+        this.jobID,
+        "\nprofile:",
+        this.profileID,
+        "\nswipes:",
+        this.swipes,
+        "\ncurrent_swipes:",
+        this.currentSwipes
+      );
     }
 
     query = `
@@ -163,11 +177,41 @@ export class SwipeJob {
         failed_reason=null
       where id = $1`;
     await this.runQuery(query, [this.jobID]);
+
     // } catch (e: any) {
     //   await this.handleFailure(e)
     //   throw e
     // }
     return this;
+  }
+
+  async updateSwipeJobToPending() {
+    const query = `
+      update swipe_jobs
+      set
+        started_at=timezone('utc', now()),
+        status='pending',
+        account_job_status_result=NULL,
+        retries=retries+1,
+        failed_at=null,
+        failed_reason=null
+      where id = $1`;
+    await this.runQuery(query, [this.jobID]);
+  }
+
+  async checkAwSnapError() {
+    const query = `
+    select * swipe_jobs where id = $1`;
+    let res = await this.runQuery(query, [this.jobID]);
+
+    if (!res.rows[0]) {
+      return false;
+    }
+
+    const swipesInDB = res.rows[0].swipes;
+    if (swipesInDB >= this.currentSwipes) {
+    }
+    return true;
   }
 
   async Run() {
@@ -361,6 +405,20 @@ export class SwipeJob {
     tlog("marked job cancelled");
   }
 
+  async markJobRunning() {
+    const query = `
+      update swipe_jobs
+      set
+        started_at=timezone('utc', now()),
+        status='running',
+        account_job_status_result=NULL,        
+        failed_at=null,
+        failed_reason=null
+      where id = $1`;
+    await this.runQuery(query, [this.jobID]);
+    tlog("marked job running");
+  }
+
   async queryDBStatus() {
     const query = `
       SELECT status
@@ -375,15 +433,7 @@ export class SwipeJob {
       FROM swipe_jobs
       where id = $1`;
     const res = await this.runQuery(query, [this.jobID]);
-    if (!res.rows[0]) {
-      return false;
-    } else {
-      if (res.rows[0].status === "cancelled") {
-        return true;
-      } else {
-        return false;
-      }
-    }
+    return res.rows[0].status;
   }
 
   async markJobOutOfLikes() {
@@ -438,7 +488,7 @@ export class SwipeJob {
         update swipe_jobs
         set status='completed',
         completed_at=timezone('utc', now()),
-        account_job_status_result='${status}'
+        account_job_status_result='${status ?? "at"}'
         where id = ${this.jobID}`;
       query2 = `
         update runs
@@ -451,7 +501,7 @@ export class SwipeJob {
         update swipe_jobs
         set status='completed',
         completed_at=timezone('utc', now()),
-        failed_reason='${status}'
+        failed_reason='${status ?? "af"}'
         where id = ${this.jobID}`;
       query2 = `
         update runs
@@ -553,7 +603,20 @@ export class SwipeJob {
 
         tlog("ERROR: handle unexpected failure");
         console.trace(e);
-        await this.markJobFailed(e);
+        await delay(2000);
+        const bConn = await this.tp.browser.isConnected();
+        console.log(bConn, "^^^^^^^^^^^^^^^^^handleFailure^^^^^^^^^^^^");
+        await this.updateSwipeJobToPending();
+
+        // if (!this.tp.browser.isConnected) {
+        //   await this.markJobFailed(e);
+        // } else {
+        //   await this.updateSwipeJobToPending();
+        //   if (this.tp && this.tp.page) {
+        //     await takeErrorScreenshot(this.tp.page, this.jobID);
+        //   }
+        //   process.exit(0);
+        // }
       }
 
       if (this.tp && this.tp.page) {
@@ -578,43 +641,83 @@ export class SwipeJob {
   // - delay checker
   async runLikesJob() {
     await this.tp.navigateToLikesPage();
+    //setInterval
+    let startSwipesCount = 0;
+    let endSwipesCount = 0;
+    let isAwSnap = false;
+    const intervalId = setInterval(async () => {
+      console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
+      if (startSwipesCount === endSwipesCount) {
+        await this.updateSwipeJobToPending();
+        process.exit(0);
+        clearInterval(intervalId);
+      } else {
+        startSwipesCount = endSwipesCount;
+      }
+    }, 1000 * 60 * 3);
+
+    if (isAwSnap) {
+    }
     for (let i = 1; i <= this.swipes; i++) {
+      tlog(`count the swipe ${i}..........................................`);
       const currentPageUrl = this.tp.getURL();
       if (i % 100 === 0) {
         await delay(2000);
         if (this.tp.page !== undefined) {
           await this.tp.navigateToLikesPage();
         }
-        // tlog("remove cookie^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-        // await this.tp.browserContext.clearCookies();
       }
-      // let likeCount = await this.tp.queryLikes();
-      // if (!likeCount) {
-      //   return;
-      // }
+
       if (i % 10 === 0) {
-        let likeCount = await this.tp.queryLikes();
-        if (likeCount) {
+        const likeCount = await this.tp.queryLikes();
+        if (likeCount && likeCount === -1) {
+          tlog(`Doesn't find out the element in queryLikes`);
+          // await this.tp.navigateToLikesPage();
+          await this.updateSwipeJobToPending();
+          process.exit(0);
+        }
+        if (likeCount && likeCount !== -1) {
           await this.updateLikeCount(likeCount);
-          // return;
         }
 
-        const isCancelled = await this.checkCancelledStatus();
-        if (isCancelled) {
+        const status = await this.checkCancelledStatus();
+        if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
         }
+        // else if (status !== "running") {
+        //   // update job status to running
+        //   await this.markJobRunning();
+        // }
       }
-      await this.tp.dragAndDrop();
+
+      const respondingOnDragAndDrop = await this.tp.dragAndDrop();
+      console.log(respondingOnDragAndDrop, "result of dragAndDrop_+++++++++");
+
+      if (respondingOnDragAndDrop) {
+        tlog(`Doesn't find out the element in dragAndDrop`);
+        // await this.tp.navigateToLikesPage();
+        await this.updateSwipeJobToPending();
+        process.exit(0);
+      }
+
       if (currentPageUrl.includes("/app/matches")) {
         console.log("Navigate when faces matches page");
-        await this.tp.goLikesYouPage();
+        const respondingOnGoLikePage = await this.tp.goLikesYouPage();
+        if (respondingOnGoLikePage) {
+          tlog(`Doesn't find out the element in dragAndDrop's goLikesYouPage`);
+          // await this.tp.navigateToLikesPage();
+          await this.updateSwipeJobToPending();
+          process.exit(0);
+        }
         await delay(2000);
+        await this.incrementJobSwipes();
         continue;
       }
       tlog("liked user, count:", i);
       await this.incrementJobSwipes();
       await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
+      endSwipesCount = i;
     }
   }
 
@@ -647,19 +750,23 @@ export class SwipeJob {
           await this.tp.navigateToRecsPage();
         }
       }
+
       await this.tp.checkAndHandleErrors();
-      try {
-        await this.tp.waitForGamepadLikes();
-      } catch (e) {
-        await this.tp.checkAndHandleErrors();
-      }
+      // try {
+      //   await this.tp.waitForGamepadLikes();
+      // } catch (e) {
+      //   await this.tp.checkAndHandleErrors();
+      // }
       await this.tp.clickPass();
       if (i % 10 === 0) {
         await delay(1000);
-        const isCancelled = await this.checkCancelledStatus();
-        if (isCancelled) {
+        const status = await this.checkCancelledStatus();
+        if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
+        } else if (status !== "running") {
+          // update job status to running
+          await this.markJobRunning();
         }
       }
       await this.incrementJobSwipesForRecommend();
@@ -699,10 +806,13 @@ export class SwipeJob {
 
       if (i % 10 === 0) {
         await delay(1000);
-        const isCancelled = await this.checkCancelledStatus();
-        if (isCancelled) {
+        const status = await this.checkCancelledStatus();
+        if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
+        } else if (status !== "running") {
+          // update job status to running
+          await this.markJobRunning();
         }
       }
       await this.incrementJobSwipes();

@@ -3,7 +3,7 @@ import playwright, { Page, Browser } from "playwright";
 import fs from "fs";
 import GoLogin from "gologin";
 import path from "path";
-import { tlog, terr, delay, saveJson, waitUntil } from "./utils";
+import { tlog, terr, delay, saveJson, waitUntil, updateSwipeJobWithPending, updateMarkJobFailed,getRandom } from "./utils";
 
 import {
   AccountBannedError,
@@ -19,6 +19,8 @@ import {
 import { SwipeJob } from "./swipeJob";
 
 const DEFAULT_TIMEOUT = 0;
+
+
 
 export default interface TinderPage {
   page: Page;
@@ -42,6 +44,7 @@ export default class TinderPage {
     let browserOptions = [];
     // if (this.options.disableImages) {
     browserOptions.push("--blink-settings=imagesEnabled=false");
+    console.log(this.job.jobType);
     // }
     // let apiToken =
     //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MmZkN2M0YzYzODJiMTg4Njg0MTM0NjAifQ.phVgL2B0iy3vJde4ku7k0xcZTXXkvxNeJz-HnRIU-VY";
@@ -52,10 +55,22 @@ export default class TinderPage {
       profile_id: this.options.profileID,
       extra_params: browserOptions,
     });
-    const { status, wsUrl } = await this.GL.start();
 
-    // tlog('starting browser', wsUrl.toString())
-    this.browser = await playwright.chromium.connectOverCDP(wsUrl.toString());
+    var url = "";
+    const connectGL = async () => {
+      try {
+        const { status, wsUrl } = await this.GL.start();
+        url = wsUrl.toString();
+      } catch (e) {
+        console.log(e);
+        await connectGL();
+      }
+    };
+
+    await connectGL();
+
+    tlog("starting browser", url);
+    this.browser = await playwright.chromium.connectOverCDP(url);
     let contexts = this.browser.contexts();
     this.browserContext = contexts[0];
     let context = contexts[0];
@@ -65,7 +80,7 @@ export default class TinderPage {
       pages.map(async (p, index) => {
         // if (pages.length - 1 === index) {
         //   tlog("don't close tinder.com page");
-        //   this.page = p;
+        //   // this.page = p;
         //   return;
         // }
         // tlog("closing tinder.com page");
@@ -79,48 +94,81 @@ export default class TinderPage {
   }
 
   async checkGoldProfile(retry: number = 0) {
-    if (!this.savedProfile) {
-      try {
-        const [response] = await Promise.all([
-          this.page.waitForResponse(
-            (response) => {
-              return response.url().includes("https://api.gotinder.com/v2/profile?") && response.status() === 200;
-            },
-            { timeout: 30000 }
-          ),
-        ]);
-        retry = retry + 1;
-        const resJson = await response.json();
-        let parsed = await saveJson(this.job.jobID, JSON.stringify(resJson));
-        console.log(parsed);
-        if (parsed) {
-          this.job.profile = parsed;
-          if (!parsed.gold) {
-            await this.page.close();
-            await this.browserContext.close();
-          }
+    try {
+      // if (this.page.url() == "https://tinder.com/") {
+      //   throw new AccountLoggedOutError();
+      //   return;
+      // }
+      const [response] = await Promise.all([
+        this.page.waitForResponse(
+          (response) => {
+            return response.url().includes("https://api.gotinder.com/v2/profile?") && response.status() === 200;
+          },
+          { timeout: 60 * 1000 * 1 }
+        ),
+      ]);
+      retry = retry + 1;
+      const resJson = await response.json();
+      let parsed = await saveJson(this.job.jobID, JSON.stringify(resJson));
+      console.log(parsed);
+      if (parsed) {
+        this.job.profile = parsed;
+        if (!parsed.gold) {
+          // await this.page.close();
+          // await this.browserContext.close();
+          await updateSwipeJobWithPending(this.job.jobID);
+          process.exit(0);
         }
-        this.savedProfile = true;
-      } catch (error) {
-        console.log(this.page.url(), "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
-        tlog(`retry: ${retry}`);
-        //@ts-ignore
-        console.log(error.response, "^^^^^");
-        //timeoutError if retry is 0
-        //@ts-ignore
-        if (retry === 0 && error.name === "TimeoutError") {
-          await this.checkGoldProfile(1);
+      }
+      this.savedProfile = true;
+    } catch (error: any) {
+      console.log(this.page.url(), "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+      tlog(`retry: ${retry}`);
+      //@ts-ignore
+      console.log(error, "^^^^^");
+      //timeoutError if retry is 0
+      //@ts-ignore
+      if (retry === 0 && error.name === "TimeoutError") {
+        await this.checkGoldProfile(1);
+        return;
+      }
+      if (retry === 1 && !this.savedProfile) {
+        if (error.name === "AccountLoggedOutError") {
+          throw new AccountLoggedOutError();
+          return;
         }
+      }
+      // //@ts-ignore
+      // if (retry === 2 && error.name === "TimeoutError") {
+      //   tlog("Responding gologin----timeout");
+      //   await this.page.close();
+      //   await this.browserContext.close();
+      // }
+      if (
+        !this.savedProfile &&
+        retry >= 1 &&
+        (this.page.url().includes("/app/recs") || this.page.url().includes("/app/likes-you"))
+      ) {
         //check responding
-        if (
-          !this.savedProfile &&
-          retry >= 1 &&
-          (this.page.url().includes("/app/recs") || this.page.url().includes("/app/likes-you"))
-        ) {
-          tlog("Responding gologin");
-          await this.page.close();
-          await this.browserContext.close();
-        }
+        delay(10 * 60 * 1000);
+        tlog("Responding gologin");
+        // switch (this.job.jobType) {
+        //   case "likes":
+        //     await this.navigateToLikesPage();
+        //     break;
+        //   case "recommended":
+        //     await this.navigateToRecsPage();
+        //     break;
+        //   case "status_check":
+        //     await this.navigateToRecsPage();
+        //     break;
+        //   default:
+        //     throw new Error("unknown job type");
+        // }
+        await updateSwipeJobWithPending(this.job.jobID);
+        process.exit(0);
+        // await this.page.close();
+        // await this.browserContext.close();
       }
     }
   }
@@ -190,6 +238,9 @@ export default class TinderPage {
       tlog("check and handle errors called");
     }
     const url = await this.page.url();
+    if (!url.includes("https://tinder.com/")) {
+      return;
+    }
     tlog("checkAndHandleErrors: URL", url);
     if (url.includes("app/banned")) {
       throw new AccountBannedError();
@@ -231,21 +282,31 @@ export default class TinderPage {
     //   await this.page.goto(this.desiredURL, { waitUntil: "networkidle" });
     //   return;
     // }
-    if (await this.checkBoostingUp()) {
+
+    const bootingUpStatus = await this.checkBoostingUp();
+    if (bootingUpStatus === 1) {
       throw new OutOfLikesError();
+    } else if (bootingUpStatus === 2) {
+      tlog(`Doesn't find out the element in checkBootingUp`);
+      if (url.includes("app/likes-you") || url.includes("app/matches")) {
+        // await this.navigateToLikesPage();
+        await updateSwipeJobWithPending(this.job.jobID);
+        process.exit(0);
+      }
+      return;
     }
 
     tlog("check out of likes");
+    const isConnected = this.browser.isConnected();
+    console.log("connecting.................", isConnected);
     if (await this.checkOutOfLikes()) {
       throw new OutOfLikesError();
     }
-    // tlog(`current url*****${url}`);
-    // if (url.includes("/app/matches")) {
-    //   await this.goLikesYouPage();
-    // }
   }
 
   async checkOutOfLikes() {
+    const isConnected = this.browser.isConnected();
+    console.log("connecting..........checkoutoflikes.......", isConnected);
     let likesPageOutOfLikes = await this.page.evaluate(() => {
       let likesPage = document.querySelector('[data-testid="likesYouScroller"]');
       if (likesPage) {
@@ -258,14 +319,18 @@ export default class TinderPage {
   async checkBoostingUp() {
     try {
       tlog("checkBoostingUp");
-      const element = await this.page.waitForSelector("main", { timeout: 30000 });
+      const isConnected = this.browser.isConnected();
+      console.log("connecting.........checkboostingup........", isConnected);
+      await delay(2000);
+      const element = await this.page.waitForSelector("main", { timeout: 60 * 1000 * 1 });
       const searchText = await element.innerHTML();
       if (searchText.toString().includes("Increase")) {
-        return true;
+        return 1; //likeOfError
       }
+      return 0; //Normal
     } catch (error) {
       console.log(error);
-      return true;
+      return 2; //timeoutError
     }
   }
 
@@ -358,41 +423,22 @@ export default class TinderPage {
     await this.checkAndHandleErrors();
     tlog("wait for recsCardboard");
     try {
-      await this.page.waitForSelector("div.recsCardboard__cards");
+      await this.page.waitForSelector("div.recsCardboard__cards", { timeout: 60 * 1000 * 1 });
     } catch (e) {
       terr("error: navigate to recs page");
-      if (retries < 2) {
-        tlog("navigation retries", retries);
-        await this.checkAndHandleErrors();
-        await this.navigateToRecsPage(retries + 1);
-      }
-    } finally {
-      await this.checkAndHandleErrors();
+      await this.navigateToRecsPage(retries + 1);
+      // if (retries < 2) {
+      //   tlog("navigation retries", retries);
+      //   await this.checkAndHandleErrors();
+      //   await this.navigateToRecsPage(retries + 1);
+      // } else {
+      //   await this.navigateToRecsPage();
+      // }
     }
+    // finally {
+    //   await this.checkAndHandleErrors();
+    // }
   }
-
-  // likes specific
-  async queryLikes() {
-    try {
-      tlog("start queryLikes");
-      let likes = await this.page.waitForSelector("main .Expand nav span", { timeout: 30000 });
-      tlog(await likes.innerText());
-      let likesNumber = (await likes.innerText()).replace(/[^.\d]/g, "");
-      tlog(`likes is ${likesNumber}`);
-      const resultNum = likesNumber ? parseInt(likesNumber) : null;
-      if (!resultNum || resultNum <= 1) {
-        tlog("ran out of likes");
-        throw new OutOfLikesError();
-      } else {
-        tlog("could not read liked by count");
-      }
-      return resultNum;
-    } catch (error) {
-      console.log(error);
-      return null;
-    }
-  }
-
   // likes specific
   async navigateToLikesPage() {
     tlog("navigating to likes-you");
@@ -405,7 +451,6 @@ export default class TinderPage {
     const vis_results = await Promise.all(
       pages.map(async (p: any, index: number) => {
         if (pages.length - 1 === index) {
-          tlog("don't close tinder.com page");
           this.page = p;
           return;
         }
@@ -431,23 +476,55 @@ export default class TinderPage {
     await this.checkAndHandleErrors();
     if (!currentUrl.includes("tinder.com/app/likes-you")) {
       tlog(`tinder.com navigated away from desired page to: ${currentUrl} -- redirecting.`);
-      await this.goLikesYouPage();
+      const respondingOnGoLikePage = await this.goLikesYouPage();
+      if (respondingOnGoLikePage) {
+        tlog(`Doesn't find out the element in goLikesYouPage`);
+        // await this.navigateToLikesPage();
+        // return;
+        await updateSwipeJobWithPending(this.job.jobID);
+        process.exit(0);
+      }
       await delay(2000);
+    }
+  }
+  // likes specific
+  async queryLikes() {
+    try {
+      tlog("start queryLikes");
+      let likes = await this.page.waitForSelector("main .Expand nav span", { timeout: 1000 * 60 * 1 });
+      tlog(await likes.innerText());
+      let likesNumber = (await likes.innerText()).replace(/[^.\d]/g, "");
+      tlog(`likes is ${likesNumber}`);
+      const resultNum = likesNumber ? parseInt(likesNumber) : null;
+      if (!resultNum || resultNum <= 1) {
+        tlog("ran out of likes");
+        throw new OutOfLikesError();
+      } else {
+        tlog("could not read liked by count");
+      }
+      return resultNum;
+    } catch (error) {
+      console.log(error);
+      return -1;
     }
   }
 
   async goLikesYouPage() {
     try {
-      const matchesTab = await this.page.waitForSelector("div[role=tablist] > div > button", { timeout: 60000 });
+      const matchesTab = await this.page.waitForSelector("div[role=tablist] > div > button", {
+        timeout: 1000 * 60 * 1,
+      });
       console.log(await matchesTab.innerText(), "^^^^^^^^^^^^^^^^^^^^");
-      matchesTab.click();
+      await matchesTab.click();
       const likesItem = await this.page.waitForSelector('a.matchListItem[href^="/app/likes-you"]', {
-        timeout: 30000,
+        timeout: 1000 * 60 * 1,
       });
       await likesItem.click();
+      return false;
     } catch (error) {
       console.log(error);
-      await this.navigateToLikesPage();
+      tlog("happened error in goLikesYouPage func");
+      return true;
     }
   }
 
@@ -478,9 +555,10 @@ export default class TinderPage {
 
           return false;
         },
-        { timeout: 1000 }
+        { timeout: 30000 }
       );
     } catch (e) {
+      // await this.checkGoldProfile();
       await this.checkAndHandleErrors();
 
       tlog("catch error waitForFunction likeButton");
@@ -536,25 +614,33 @@ export default class TinderPage {
   }
 
   async clickPass() {
-    await this.page.waitForFunction(() => {
-      let hiddenSpans = document.querySelectorAll("span.Hidden");
-      let p1 = [...hiddenSpans].filter((x) => (x as HTMLElement).innerText == "NOPE")[0].parentElement;
-      let p2;
-      let p3;
-      if (p1 != null) {
-        p2 = p1.parentElement;
-        if (p2 != null) {
-          p3 = p2.parentElement;
-          if (p3 != null && p3.getAttribute("aria-disabled") != "true") {
-            if (p3 != null) {
-              p3.click();
-              return true;
+    try {
+      await this.page.waitForFunction(
+        () => {
+          let hiddenSpans = document.querySelectorAll("span.Hidden");
+          let p1 = [...hiddenSpans].filter((x) => (x as HTMLElement).innerText == "NOPE")[0].parentElement;
+          let p2;
+          let p3;
+          if (p1 != null) {
+            p2 = p1.parentElement;
+            if (p2 != null) {
+              p3 = p2.parentElement;
+              if (p3 != null && p3.getAttribute("aria-disabled") != "true") {
+                if (p3 != null) {
+                  p3.click();
+                  return true;
+                }
+              }
             }
           }
-        }
-      }
-      return false;
-    });
+          return false;
+        },
+        { timeout: 60 * 1000 * 1 }
+      );
+    } catch (error) {
+      terr("clickPass error");
+      await this.navigateToRecsPage();
+    }
   }
 
   async clickLike() {
@@ -603,80 +689,36 @@ export default class TinderPage {
     tlog("start drag and drop");
     await this.checkAndHandleErrors();
     tlog("Done checking error on dragAndDrop", this.page.url());
+    if (this.page.url().includes("/app/matches")) {
+      return false;
+    }
     try {
-      const likesYouCard = await this.page.waitForSelector('[data-testid="likesYouCard"] div', { timeout: 3000 });
+      // const likesYouCard = await this.page.waitForSelector('[data-testid="likesYouCard"] div', {
+      //   timeout: 1000 * 60 * 1,
+      // });
+      const likesYouCard = await this.page.waitForSelector('[data-testid="likesYouCard"] div', {
+        timeout: 1000 * 60 * 1,
+      });
+      const likesYouCard1 = this.page.locator(`[data-testid="likesYouCard"] >> nth=${getRandom(0, 3)}`);
+
       let boundingBox;
       console.log("likesYouCard Element");
       // TODO handle null case
-      if (likesYouCard) {
-        boundingBox = await likesYouCard.boundingBox();
+      if (likesYouCard1) {
+        boundingBox = await likesYouCard1.boundingBox();
         console.log(boundingBox, "got likeyou");
         if (boundingBox) {
           await this.page.mouse.move(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
           await this.page.mouse.down();
-          await this.page.mouse.move(1000, 19);
+          await this.page.mouse.move(1924, 19);
           await this.page.mouse.up();
         }
       }
-
-      // wait for card to stop moving
-      // await this.page.waitForFunction(
-      //   () => {
-      //     let el = document.querySelectorAll('[data-testid="likesYouCard"]')[0] as HTMLElement | null;
-      //     console.log(el, "fucntion&&&&7");
-      //     if (el) {
-      //       return el.style.transform == "translate3d(0px, 0px, 0px) rotate(0deg) scale(1, 1)";
-      //     }
-      //   },
-      //   { timeout: 1000 }
-      // );
       await delay(800);
+      return false;
     } catch (error) {
       console.log(error);
-      return;
-    }
-  }
-
-  async viewProfile() {
-    const page = this.page;
-    try {
-      await delay(2000);
-      console.log("start viewProfile");
-      const profileItem = await this.page.$('[data-testid="likesYouCard"] div');
-      if (profileItem) {
-        await delay(2000);
-        await profileItem.click();
-        await page.waitForLoadState("domcontentloaded");
-      }
-
-      for (let i = 0; i < 3; i++) {
-        await delay(2000);
-        const profile = await page.$(
-          `//div/div[1]/div/main/div[1]/div/div/div[2]/div[2]/div/div[1]/div/div[1]/span/div/div[2]/button[${i + 1}]`
-        );
-        if (profile) {
-          await profile.click();
-          await page.waitForLoadState("domcontentloaded");
-          if (i === 2) {
-            try {
-              const likeSwiper = await page.$(
-                "//div/div[1]/div/main/div[1]/div/div/div[2]/div[2]/div/div[2]/div/div/div[4]/button"
-              );
-              await page.waitForLoadState("domcontentloaded");
-              await delay(2000);
-              if (likeSwiper) {
-                await likeSwiper.click();
-              }
-            } catch (error) {
-              console.log(error, "error");
-              process.exit();
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.log(error);
-      process.exit();
+      return true;
     }
   }
 }

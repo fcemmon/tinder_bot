@@ -21,6 +21,7 @@
     "gologin": "^1.0.50",
     "moment": "^2.29.4",
     "node-cron": "^3.0.2",
+    "node-storage": "^0.0.9",
     "nodemon": "^2.0.8",
     "pg": "^8.7.3",
     "puppeteer-core": "^16.0.0"

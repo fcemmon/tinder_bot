@@ -13,8 +13,8 @@ export const getDBClient = async () => {
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
     ssl: {
-      rejectUnauthorized: false,
-    },
+        rejectUnauthorized: false,
+    }
   });
 
   await client.connect();
@@ -230,3 +230,41 @@ export const saveJson = async (jobID: number, json: string) => {
 export const sleep = async (millis: number) => {
   return new Promise((resolve) => setTimeout(resolve, millis));
 };
+
+export const updateSwipeJobWithPending = async (jobID: number) => {
+  const query = `
+      update swipe_jobs
+      set
+        started_at=timezone('utc', now()),
+        status='pending',
+        account_job_status_result=NULL,
+        retries=retries+1,
+        failed_at=null,
+        failed_reason=null
+      where id = $1`;
+  await runQuery(query, [jobID]);
+};
+
+export const updateMarkJobFailed = async (jobID?: number, runID?: number) => {
+  const query = `
+    UPDATE swipe_jobs
+      SET status='failed',
+      failed_at=timezone('utc', now())
+      where id = $1`;
+  await runQuery(query, [jobID]);
+
+  const query2 = `
+    UPDATE runs
+      SET status='failed',
+      failed_at=timezone('utc', now()),
+      failed_reason=$1
+      where id = $2`;
+  await runQuery(query2, ["Failed", runID]);
+};
+
+export const getRandom = (min: number, max: number) => {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min) + min);
+};
+
