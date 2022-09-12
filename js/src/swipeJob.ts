@@ -547,7 +547,8 @@ export class SwipeJob {
 
     if (this == null) {
       tlog("error: no swipe job created");
-      return 0;
+      process.exit(0);
+      // return 0;
     }
 
     try {

@@ -29,7 +29,7 @@ const runQuery = async (query, values) => {
 };
 
 const getJobIds = async (count) => {
-  if (count % 60 === 0) {
+  if (count !== 0 && count % 60 === 0) {
     store.remove("prevData");
   }
 

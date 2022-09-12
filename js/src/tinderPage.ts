@@ -3,7 +3,16 @@ import playwright, { Page, Browser } from "playwright";
 import fs from "fs";
 import GoLogin from "gologin";
 import path from "path";
-import { tlog, terr, delay, saveJson, waitUntil, updateSwipeJobWithPending, updateMarkJobFailed,getRandom } from "./utils";
+import {
+  tlog,
+  terr,
+  delay,
+  saveJson,
+  waitUntil,
+  updateSwipeJobWithPending,
+  updateMarkJobFailed,
+  getRandom,
+} from "./utils";
 
 import {
   AccountBannedError,
@@ -19,8 +28,6 @@ import {
 import { SwipeJob } from "./swipeJob";
 
 const DEFAULT_TIMEOUT = 0;
-
-
 
 export default interface TinderPage {
   page: Page;
@@ -49,7 +56,7 @@ export default class TinderPage {
     // let apiToken =
     //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MmZkN2M0YzYzODJiMTg4Njg0MTM0NjAifQ.phVgL2B0iy3vJde4ku7k0xcZTXXkvxNeJz-HnRIU-VY";
     this.GL = new GoLogin({
-      autoUpdateBrowser: false,
+      autoUpdateBrowser: true,
       token: this.options.apiToken,
       // token: apiToken,
       profile_id: this.options.profileID,
