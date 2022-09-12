@@ -547,8 +547,8 @@ export class SwipeJob {
 
     if (this == null) {
       tlog("error: no swipe job created");
-      process.exit(0);
-      // return 0;
+      // process.exit(0);
+      return 0;
     }
 
     try {
@@ -599,7 +599,7 @@ export class SwipeJob {
           e.stack.includes("ERRCONNREFUSED")
         ) {
           await this.markJobCompleted("proxy_error", false);
-          return exitCode;
+          // return exitCode;
         }
 
         tlog("ERROR: handle unexpected failure");
