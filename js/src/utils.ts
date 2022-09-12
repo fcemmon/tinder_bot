@@ -233,6 +233,13 @@ export const sleep = async (millis: number) => {
 
 export const updateSwipeJobWithPending = async (jobID: number) => {
   const query = `
+    SELECT status
+    FROM swipe_jobs
+    where id = $1`;
+  const res = await runQuery(query, [jobID]);
+  const status = res.rows[0].status;
+  if (status !== 'cancelled') {
+    const query = `
       update swipe_jobs
       set
         started_at=timezone('utc', now()),
@@ -242,7 +249,8 @@ export const updateSwipeJobWithPending = async (jobID: number) => {
         failed_at=null,
         failed_reason=null
       where id = $1`;
-  await runQuery(query, [jobID]);
+    await runQuery(query, [jobID]);
+  }
 };
 
 export const updateMarkJobFailed = async (jobID?: number, runID?: number) => {

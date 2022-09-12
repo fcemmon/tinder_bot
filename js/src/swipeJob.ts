@@ -187,16 +187,24 @@ export class SwipeJob {
 
   async updateSwipeJobToPending() {
     const query = `
-      update swipe_jobs
-      set
-        started_at=timezone('utc', now()),
-        status='pending',
-        account_job_status_result=NULL,
-        retries=retries+1,
-        failed_at=null,
-        failed_reason=null
+      SELECT status
+      FROM swipe_jobs
       where id = $1`;
-    await this.runQuery(query, [this.jobID]);
+    const res = await this.runQuery(query, [this.jobID]);
+    const status = res.rows[0].status;
+    if (status !== 'cancelled') {
+      const query = `
+        update swipe_jobs
+        set
+          started_at=timezone('utc', now()),
+          status='pending',
+          account_job_status_result=NULL,
+          retries=retries+1,
+          failed_at=null,
+          failed_reason=null
+        where id = $1`;
+      await this.runQuery(query, [this.jobID]);
+    }
   }
 
   async checkAwSnapError() {
@@ -685,6 +693,7 @@ export class SwipeJob {
         if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
+          return;
         }
         // else if (status !== "running") {
         //   // update job status to running
@@ -765,6 +774,7 @@ export class SwipeJob {
         if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
+          return;
         } else if (status !== "running") {
           // update job status to running
           await this.markJobRunning();
@@ -811,6 +821,7 @@ export class SwipeJob {
         if (status === "cancelled") {
           await this.markJobCancelled();
           process.exit(0);
+          return;
         } else if (status !== "running") {
           // update job status to running
           await this.markJobRunning();
