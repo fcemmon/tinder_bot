@@ -81,7 +81,6 @@ export default class TinderPage {
     let contexts = this.browser.contexts();
     this.browserContext = contexts[0];
     let context = contexts[0];
-    await context.clearCookies();
     let pages = await context.pages();
     const vis_results = await Promise.all(
       pages.map(async (p, index) => {
@@ -94,6 +93,11 @@ export default class TinderPage {
         p.close();
       })
     );
+
+    this.page = await context.newPage();
+    await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
+    this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
+    this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
     // await this.page.route("**", (route) => route.continue());
     // await this.page.route("**/*.{png,jpg,jpeg}", (route) => route.abort());
     // this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
@@ -453,22 +457,22 @@ export default class TinderPage {
 
     // await this.page.setViewportSize({ width: 1024, height: 768 });
     // await this.page.route(/(\.png$)|(\.jpg$)/, (route) => route.abort());
-    this.page = await this.browserContext.newPage();
-    let pages = this.browserContext.pages();
-    const vis_results = await Promise.all(
-      pages.map(async (p: any, index: number) => {
-        if (pages.length - 1 === index) {
-          this.page = p;
-          return;
-        }
-        tlog("closing tinder.com page");
-        p.close();
-      })
-    );
+    // this.page = await this.browserContext.newPage();
+    // let pages = this.browserContext.pages();
+    // const vis_results = await Promise.all(
+    //   pages.map(async (p: any, index: number) => {
+    //     if (pages.length - 1 === index) {
+    //       this.page = p;
+    //       return;
+    //     }
+    //     tlog("closing tinder.com page");
+    //     p.close();
+    //   })
+    // );
     //added
-    await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
-    this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
-    this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
+    // await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
+    // this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
+    // this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
     ////
     await Promise.all([
       this.page.goto(this.desiredURL, { waitUntil: "networkidle", timeout: DEFAULT_TIMEOUT }),

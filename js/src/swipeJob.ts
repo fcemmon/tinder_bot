@@ -218,6 +218,7 @@ export class SwipeJob {
 
     const swipesInDB = res.rows[0].swipes;
     if (swipesInDB >= this.currentSwipes) {
+
     }
     return true;
   }
@@ -612,11 +613,11 @@ export class SwipeJob {
 
         tlog("ERROR: handle unexpected failure");
         console.trace(e);
-        await delay(2000);
-        const bConn = await this.tp.browser.isConnected();
-        console.log(bConn, "^^^^^^^^^^^^^^^^^handleFailure^^^^^^^^^^^^");
+        // await delay(2000);
+        // const bConn = await this.tp.browser.isConnected();
+        // console.log(bConn, "^^^^^^^^^^^^^^^^^handleFailure^^^^^^^^^^^^");
         await this.updateSwipeJobToPending();
-
+        process.exit(0);
         // if (!this.tp.browser.isConnected) {
         //   await this.markJobFailed(e);
         // } else {
@@ -657,9 +658,9 @@ export class SwipeJob {
     const intervalId = setInterval(async () => {
       console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
       if (startSwipesCount === endSwipesCount) {
+        clearInterval(intervalId);
         await this.updateSwipeJobToPending();
         process.exit(0);
-        clearInterval(intervalId);
       } else {
         startSwipesCount = endSwipesCount;
       }
@@ -695,10 +696,10 @@ export class SwipeJob {
           process.exit(0);
           return;
         }
-        // else if (status !== "running") {
-        //   // update job status to running
-        //   await this.markJobRunning();
-        // }
+        else if (status !== "running") {
+          // update job status to running
+          await this.markJobRunning();
+        }
       }
 
       const respondingOnDragAndDrop = await this.tp.dragAndDrop();
