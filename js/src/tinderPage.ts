@@ -127,6 +127,8 @@ export default class TinderPage {
         if (!parsed.gold) {
           // await this.page.close();
           // await this.browserContext.close();
+          await this.stop();
+          await delay(1000);
           await updateSwipeJobWithPending(this.job.jobID);
           process.exit(0);
         }
@@ -176,6 +178,8 @@ export default class TinderPage {
         //   default:
         //     throw new Error("unknown job type");
         // }
+        await this.stop();
+        await delay(1000);
         await updateSwipeJobWithPending(this.job.jobID);
         process.exit(0);
         // await this.page.close();
@@ -301,6 +305,8 @@ export default class TinderPage {
       tlog(`Doesn't find out the element in checkBootingUp`);
       if (url.includes("app/likes-you") || url.includes("app/matches")) {
         // await this.navigateToLikesPage();
+        await this.stop();
+        await delay(1000);
         await updateSwipeJobWithPending(this.job.jobID);
         process.exit(0);
       }
@@ -492,6 +498,8 @@ export default class TinderPage {
         tlog(`Doesn't find out the element in goLikesYouPage`);
         // await this.navigateToLikesPage();
         // return;
+        await this.stop();
+        await delay(1000);
         await updateSwipeJobWithPending(this.job.jobID);
         process.exit(0);
       }

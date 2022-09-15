@@ -186,13 +186,15 @@ export class SwipeJob {
   }
 
   async updateSwipeJobToPending() {
+    await this.tp.stop();
+    await delay(1000);
     const query = `
       SELECT status
       FROM swipe_jobs
       where id = $1`;
     const res = await this.runQuery(query, [this.jobID]);
     const status = res.rows[0].status;
-    if (status !== 'cancelled') {
+    if (status !== "cancelled") {
       const query = `
         update swipe_jobs
         set
@@ -218,7 +220,6 @@ export class SwipeJob {
 
     const swipesInDB = res.rows[0].swipes;
     if (swipesInDB >= this.currentSwipes) {
-
     }
     return true;
   }
@@ -695,8 +696,7 @@ export class SwipeJob {
           await this.markJobCancelled();
           process.exit(0);
           return;
-        }
-        else if (status !== "running") {
+        } else if (status !== "running") {
           // update job status to running
           await this.markJobRunning();
         }
