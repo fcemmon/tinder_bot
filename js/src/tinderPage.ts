@@ -532,24 +532,7 @@ export default class TinderPage {
   }
   // likes specific
   async queryChangeLocation() {
-    try {
-      tlog("start change location");
-      let likes = await this.page.waitForSelector("main .Expand nav span", { timeout: 1000 * 60 * 1 });
-      tlog(await likes.innerText());
-      let likesNumber = (await likes.innerText()).replace(/[^.\d]/g, "");
-      tlog(`likes is ${likesNumber}`);
-      const resultNum = likesNumber ? parseInt(likesNumber) : null;
-      if (!resultNum || resultNum <= 1) {
-        tlog("ran out of likes");
-        throw new OutOfLikesError();
-      } else {
-        tlog("could not read liked by count");
-      }
-      return resultNum;
-    } catch (error) {
-      console.log(error);
-      return -1;
-    }
+    // Change location
   }
   // likes specific
   async queryLikes() {
