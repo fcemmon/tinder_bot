@@ -418,19 +418,19 @@ export default class TinderPage {
   async navigateToRecsPage(retries: number = 0) {
     tlog("navigating to Recs");
     this.desiredURL = "https://tinder.com/app/recs";
-    this.page = await this.browserContext.newPage();
-    let pages = this.browserContext.pages();
-    const vis_results = await Promise.all(
-      pages.map(async (p: any, index: number) => {
-        if (pages.length - 1 === index) {
-          tlog("don't close tinder.com page");
-          this.page = p;
-          return;
-        }
-        tlog("closing tinder.com page");
-        p.close();
-      })
-    );
+    // this.page = await this.browserContext.newPage();
+    // let pages = this.browserContext.pages();
+    // const vis_results = await Promise.all(
+    //   pages.map(async (p: any, index: number) => {
+    //     if (pages.length - 1 === index) {
+    //       tlog("don't close tinder.com page");
+    //       this.page = p;
+    //       return;
+    //     }
+    //     tlog("closing tinder.com page");
+    //     p.close();
+    //   })
+    // );
     await Promise.all([
       this.page.goto(this.desiredURL, { waitUntil: "networkidle", timeout: DEFAULT_TIMEOUT }),
       this.checkGoldProfile(),
@@ -532,7 +532,7 @@ export default class TinderPage {
   }
   // likes specific
   async queryChangeLocation() {
-    // Change location
+    // Change Location
   }
   // likes specific
   async queryLikes() {
