@@ -531,8 +531,41 @@ export default class TinderPage {
     }
   }
   // likes specific
-  async queryChangeLocation() {
+  async queryChangeLocation(city: string) {
     // Change Location
+    try {
+      tlog("start location change");
+      tlog("city", city);
+      let locationInput = await this.page.waitForSelector("input[placeholder='Search a location']", {
+        timeout: 1000 * 60 * 1,
+      });
+      let boundingBox;
+      if (locationInput) {
+        boundingBox = await locationInput.boundingBox();
+        console.log(boundingBox, "got location input");
+        if (boundingBox) {
+          await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+          await delay(2000);
+          await this.page.keyboard.type(city);
+          await delay(3000);
+          await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height + 20)
+          await delay(6000);
+
+          let addLocationBt = await this.page.waitForSelector("button[title='Add new location']", {
+            timeout: 1000 * 60 * 5
+          });
+
+          boundingBox = await addLocationBt.boundingBox();
+
+          if (boundingBox) {
+            await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+          }
+        }
+      }
+    } catch(error) {
+      tlog('location change error', error);
+      return -1;
+    }
   }
   // likes specific
   async queryLikes() {

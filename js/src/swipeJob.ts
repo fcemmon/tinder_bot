@@ -13,6 +13,7 @@ import {
   takeErrorScreenshot,
   getDBClient,
   sleep,
+  getRandom
 } from "./utils";
 import TinderPage from "./tinderPage";
 
@@ -32,6 +33,8 @@ import {
   StatusCheckComplete,
 } from "./errors";
 import { Client } from "pg";
+
+const locationData = require('./constants/locations.json')
 
 interface Profile {
   gold: any;
@@ -138,7 +141,7 @@ export class SwipeJob {
     this.delayVariance = parseFloat(res.rows[0].delay_variance);
 
     // TODO test me
-    if (this.swipes < 1 && this.jobType != "status_check") {
+    if (this.swipes < 1 && this.jobType != "status_check" && this.jobType != "location_change") {
       throw new AlreadyFinishedError();
     }
 
@@ -253,6 +256,9 @@ export class SwipeJob {
           break;
         case "status_check":
           await this.runStatusCheckJob();
+          break;
+        case "location_change":
+          await this.runLocationChangeJob();
           break;
         default:
           throw new Error("unknown job type");
@@ -785,6 +791,18 @@ export class SwipeJob {
       await delay(2000);
     }
   }
+  
+  async runLocationChangeJob() {
+    await this.tp.navigateToPassportPage();
+    const allCountries = Object.keys(locationData);
+    const country = allCountries[getRandom(0, allCountries.length - 1)];
+    const cities = locationData[country];
+    const city = cities[getRandom(0, cities.length - 1)];
+    console.log(city);
+    await delay(10000);
+    await this.tp.queryChangeLocation(city);
+  }
+
   async runStatusCheckJob() {
     await this.tp.navigateToRecsPage();
 
