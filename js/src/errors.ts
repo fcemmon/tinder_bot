@@ -25,8 +25,16 @@ export class RanOutOfLikesError extends CustomError {
   constructor() { super('Ran out of likes'); }
 }
 
+export class LimitOfLikesError extends CustomError {
+  constructor() { super('Limit of likes'); }
+}
+
 export class AccountLoggedOutError extends CustomError {
   constructor() { super('Account Logged Out'); }
+}
+
+export class ProfileNoGoldError extends CustomError {
+  constructor() { super('Profile is not gold'); }
 }
 
 export class ProxyError extends CustomError {
@@ -65,11 +73,13 @@ module.exports = {
   AccountBannedError,
   AccountLoggedOutError,
   AccountUnderReviewError,
+  ProfileNoGoldError,
   AgeRestrictedError,
   AlreadyFinishedError,
   CaptchaRequiredError,
   IdentityVerificationRequired,
   OutOfLikesError,
+  LimitOfLikesError,
   ProfileVerificationError,
   ProxyError,
   RanOutOfLikesError,

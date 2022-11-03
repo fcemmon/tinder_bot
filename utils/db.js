@@ -8,9 +8,9 @@ const getDBClient = async () => {
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    // ssl: {
+    //   rejectUnauthorized: false,
+    // },
   });
 
   await client.connect();
@@ -34,7 +34,7 @@ const getJobIds = async (count) => {
   }
 
   const query = `
-  select * from swipe_jobs where status = 'pending' or status = 'scheduled'`;
+  select * from swipe_jobs where status = 'pending'`;
   const { rows } = await runQuery(query, []);
   let jobIds = [];
   const result = rows?.map((r) => {
@@ -55,6 +55,10 @@ const getJobIds = async (count) => {
     }
   } else {
     newJobIds = jobIds;
+  }
+
+  if (newJobIds.length > 3) {
+    newJobIds = newJobIds.filter((obj, index) => index < 3);
   }
   // console.log(newJobIds, "newJobIds");
 

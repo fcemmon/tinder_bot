@@ -12,9 +12,9 @@ export const getDBClient = async () => {
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    ssl: {
-        rejectUnauthorized: false,
-    }
+    // ssl: {
+    //     rejectUnauthorized: false,
+    // }
   });
 
   await client.connect();
@@ -93,6 +93,19 @@ export const parseProfileJson = (json: string) => {
   // console.log(user)
   // console.log(res)
 };
+
+export const saveCookie = (jobID: number, cookies: any) => {
+  const cookieJson = JSON.stringify(cookies);
+  const cookiePath = path.join(screenshotPath.toString(), jobID.toString(), "cookie.json");
+  fs.writeFileSync(cookiePath, cookieJson);
+}
+
+export const loadCookie = (jobID: number) => {
+  const cookiePath = path.join(screenshotPath.toString(), jobID.toString(), "cookie.json");
+  const cookies = fs.readFileSync(cookiePath, 'utf8');
+  const deserializedCookies = JSON.parse(cookies)
+  return deserializedCookies;
+}
 
 export const sendUserTelegramMessage = async (userID: number, message: string) => {
   let res = await runQuery("select telegram_channel from users where id = $1", [userID]);
@@ -251,6 +264,32 @@ export const updateSwipeJobWithPending = async (jobID: number) => {
       where id = $1`;
     await runQuery(query, [jobID]);
   }
+};
+
+export const updateSwipeJobWithNoGold = async (jobID: number) => {
+  const query = `
+    SELECT status
+    FROM swipe_jobs
+    where id = $1`;
+  const res = await runQuery(query, [jobID]);
+  const status = res.rows[0].status;
+  if (status !== 'cancelled') {
+    const query = `
+      update swipe_jobs
+      set
+        gold=false
+      where id = $1`;
+    await runQuery(query, [jobID]);
+  }
+};
+
+export const updateTinderAccountWithNoGold = async (accountId: number) => {
+  const query = `
+      update tinder_accounts
+      set
+        gold=false
+      where id = $1`;
+    await runQuery(query, [accountId]);
 };
 
 export const updateMarkJobFailed = async (jobID?: number, runID?: number) => {

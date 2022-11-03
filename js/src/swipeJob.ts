@@ -20,12 +20,14 @@ import TinderPage from "./tinderPage";
 import {
   AccountBannedError,
   AccountLoggedOutError,
+  ProfileNoGoldError,
   AccountUnderReviewError,
   AgeRestrictedError,
   AlreadyFinishedError,
   CaptchaRequiredError,
   IdentityVerificationRequired,
   OutOfLikesError,
+  LimitOfLikesError,
   ProfileVerificationError,
   ProxyError,
   RanOutOfLikesError,
@@ -71,7 +73,7 @@ export class SwipeJob {
     this.options = options;
     this.options.verbose = true;
     this.swipesSinceLastMatch = 0;
-    this.shadowBanSwipeCount = 50;
+    this.shadowBanSwipeCount = 70;
     this.executionContextDestroyedCounter = 0;
   }
 
@@ -135,13 +137,19 @@ export class SwipeJob {
     this.swipes = res.rows[0].target;
     this.currentSwipes = res.rows[0].swipes;
 
+
     if (this.jobType == "status_check") {
       this.swipes = this.shadowBanSwipeCount + 1;
     }
+
+    if (this.jobType == "limit_of_likes") {
+      this.swipes = 100000000;
+    }
+
     this.delayVariance = parseFloat(res.rows[0].delay_variance);
 
     // TODO test me
-    if (this.swipes < 1 && this.jobType != "status_check" && this.jobType != "location_change") {
+    if (this.swipes < 1 && this.jobType != "status_check" && this.jobType != 'location_change') {
       throw new AlreadyFinishedError();
     }
 
@@ -260,6 +268,9 @@ export class SwipeJob {
         case "location_change":
           await this.runLocationChangeJob();
           break;
+        case "limit_of_likes":
+          await this.runLimitOfLikesJob();
+          break;
         default:
           throw new Error("unknown job type");
       }
@@ -293,7 +304,7 @@ export class SwipeJob {
     // if more than 50 swipes have occured since last match, throw shadowbanned error
     tlog("swipes since last match:", this.swipesSinceLastMatch);
 
-    if (this.swipesSinceLastMatch >= this.shadowBanSwipeCount) {
+    if (this.swipesSinceLastMatch >= this.shadowBanSwipeCount && this.jobType !== 'limit_of_likes') {
       tlog(`more than ${this.shadowBanSwipeCount} swipes since last match. account considered shadowbanned`);
       throw new ShadowBannedError();
     }
@@ -468,6 +479,43 @@ export class SwipeJob {
     tlog("marked job", this.jobID, "ran out of likes");
   }
 
+  async markJobLimitOfLikes() {
+    const query = `
+      UPDATE swipe_jobs
+        SET status='ran_limit_of_likes',
+        failed_at=timezone('utc', now())
+        where id = $1`;
+    await this.runQuery(query, [this.jobID]);
+    const query2 = `
+      UPDATE runs
+        SET status='ran_limit_of_likes',
+        failed_at=timezone('utc', now())
+        where id = $1`;
+    await this.runQuery(query2, [this.runID]);
+    tlog("marked job", this.jobID, "ran limit of likes");
+  }
+
+  async markJobFailedWithNoGoldProfile(e: Error) {
+    let failedReason = "Profile is not gold";
+    tlog(failedReason);
+    const query = `
+      UPDATE swipe_jobs
+        SET status='failed',
+        failed_at=timezone('utc', now())
+        where id = $1`;
+    await this.runQuery(query, [this.jobID]);
+
+    const query2 = `
+      UPDATE runs
+        SET status='failed',
+        failed_at=timezone('utc', now()),
+        failed_reason=$1
+        where id = $2`;
+    await this.runQuery(query2, [failedReason, this.runID]);
+    tlog("marked job", this.jobID, "failed");
+    this.status = "failed";
+  }
+
   async markJobFailed(e: Error) {
     let failedReason = e.stack ? e.stack.toString() : "";
     tlog(failedReason);
@@ -500,12 +548,23 @@ export class SwipeJob {
 
     if (updateAccount) {
       await this.updateAccountStatus(status);
-      query = `
+      if (status === "limit_of_likes") {
+        query = `
+        update swipe_jobs,
+        scheduled_at=timezone('utc', now() + '12 hours'),
+        job_type='limit_of_likes',
+        completed_at=timezone('utc', now()),
+        account_job_status_result='${status ?? "at"}'
+        where id = ${this.jobID}`;
+      } else {
+        query = `
         update swipe_jobs
         set status='completed',
         completed_at=timezone('utc', now()),
         account_job_status_result='${status ?? "at"}'
         where id = ${this.jobID}`;
+      }
+
       query2 = `
         update runs
         set status='completed',
@@ -572,6 +631,11 @@ export class SwipeJob {
         await this.markJobCompleted("profile_deleted");
       } else if (e.stack.includes("401 INVALID TOKEN OR PROFILE NOT FOUND")) {
         await this.markJobCompleted("profile_deleted");
+      } else if (e instanceof ProfileNoGoldError) {
+        await this.markJobFailedWithNoGoldProfile(e);
+        await this.tp.stop();
+        await await(1000);
+        process.exit(0);
       } else if (e instanceof AccountLoggedOutError) {
         await this.markJobCompleted("logged_out");
       } else if (e instanceof StatusCheckComplete) {
@@ -591,6 +655,8 @@ export class SwipeJob {
         await this.markJobCompleted("identity_verification");
       } else if (e instanceof AccountUnderReviewError) {
         await this.markJobCompleted("under_review");
+      } else if (e instanceof LimitOfLikesError) {
+        await this.markJobCompleted("limit_of_likes");
       } else if (e instanceof OutOfLikesError) {
         await this.markJobCompleted("out_of_likes");
       } else if (e instanceof RanOutOfLikesError) {
@@ -623,6 +689,8 @@ export class SwipeJob {
         // await delay(2000);
         // const bConn = await this.tp.browser.isConnected();
         // console.log(bConn, "^^^^^^^^^^^^^^^^^handleFailure^^^^^^^^^^^^");
+        await this.tp.stop();
+        await delay(1000);
         await this.updateSwipeJobToPending();
         process.exit(0);
         // if (!this.tp.browser.isConnected) {
@@ -666,6 +734,8 @@ export class SwipeJob {
       console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
       if (startSwipesCount === endSwipesCount) {
         clearInterval(intervalId);
+        await this.tp.stop();
+        await delay(1000);
         await this.updateSwipeJobToPending();
         process.exit(0);
       } else {
@@ -690,6 +760,8 @@ export class SwipeJob {
         if (likeCount && likeCount === -1) {
           tlog(`Doesn't find out the element in queryLikes`);
           // await this.tp.navigateToLikesPage();
+          await this.tp.stop();
+          await delay(1000);
           await this.updateSwipeJobToPending();
           process.exit(0);
         }
@@ -714,6 +786,8 @@ export class SwipeJob {
       if (respondingOnDragAndDrop) {
         tlog(`Doesn't find out the element in dragAndDrop`);
         // await this.tp.navigateToLikesPage();
+        await this.tp.stop();
+        await delay(1000);
         await this.updateSwipeJobToPending();
         process.exit(0);
       }
@@ -724,6 +798,8 @@ export class SwipeJob {
         if (respondingOnGoLikePage) {
           tlog(`Doesn't find out the element in dragAndDrop's goLikesYouPage`);
           // await this.tp.navigateToLikesPage();
+          await this.tp.stop();
+          await delay(1000);
           await this.updateSwipeJobToPending();
           process.exit(0);
         }
@@ -760,6 +836,8 @@ export class SwipeJob {
   // move to tinderrecs
   async runRecommendedJob() {
     await this.tp.navigateToRecsPage();
+    let likeCounter = 0;
+    let passCounter = 0;
     for (let i = 1; i <= this.swipes; i++) {
       if (i % 100 === 0) {
         await delay(2000);
@@ -767,14 +845,23 @@ export class SwipeJob {
           await this.tp.navigateToRecsPage();
         }
       }
-
+      const random = Math.random();
+      
       await this.tp.checkAndHandleErrors();
-      // try {
-      //   await this.tp.waitForGamepadLikes();
-      // } catch (e) {
-      //   await this.tp.checkAndHandleErrors();
-      // }
-      await this.tp.clickPass();
+      try {
+        await this.tp.waitForGamepadLikes();
+      } catch (e) {
+        await this.tp.checkAndHandleErrors();
+      }
+
+      if (random >= 1 - this.recSwipePercentage / 100) {
+        likeCounter += 1;
+        await this.tp.clickLike();
+      } else {
+        passCounter += 1;
+        await this.tp.clickPass();
+      }
+
       if (i % 10 === 0) {
         await delay(1000);
         const status = await this.checkCancelledStatus();
@@ -787,7 +874,8 @@ export class SwipeJob {
           await this.markJobRunning();
         }
       }
-      await this.incrementJobSwipesForRecommend();
+      await this.incrementJobSwipes();
+      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
       await delay(2000);
     }
   }
@@ -804,6 +892,54 @@ export class SwipeJob {
   }
 
   async runStatusCheckJob() {
+    await this.tp.navigateToRecsPage();
+
+    let i = 0;
+    let likeCounter = 0;
+    let passCounter = 0;
+    // await this.tp.checkAndHandleErrors();
+    for await (const x of Array(this.swipes)) {
+      i = i + 1;
+      if (i % 100 === 0) {
+        await delay(2000);
+        if (this.tp.page !== undefined) {
+          await this.tp.navigateToRecsPage();
+        }
+      }
+      await this.tp.checkAndHandleErrors();
+      const random = Math.random();
+      try {
+        await this.tp.waitForGamepadLikes();
+      } catch (e) {
+        await this.tp.checkAndHandleErrors();
+      }
+
+      if (random >= 1 - this.recSwipePercentage / 100) {
+        likeCounter += 1;
+        await this.tp.clickLike();
+      } else {
+        passCounter += 1;
+        await this.tp.clickPass();
+      }
+
+      if (i % 10 === 0) {
+        await delay(1000);
+        const status = await this.checkCancelledStatus();
+        if (status === "cancelled") {
+          await this.markJobCancelled();
+          process.exit(0);
+          return;
+        } else if (status !== "running") {
+          // update job status to running
+          await this.markJobRunning();
+        }
+      }
+      await this.incrementJobSwipes();
+      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
+    }
+  }
+
+  async runLimitOfLikesJob() {
     await this.tp.navigateToRecsPage();
 
     let i = 0;

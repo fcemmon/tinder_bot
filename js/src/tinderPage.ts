@@ -11,17 +11,23 @@ import {
   waitUntil,
   updateSwipeJobWithPending,
   updateMarkJobFailed,
+  updateSwipeJobWithNoGold,
+  updateTinderAccountWithNoGold,
   getRandom,
+  saveCookie,
+  loadCookie
 } from "./utils";
 
 import {
   AccountBannedError,
   AccountLoggedOutError,
+  ProfileNoGoldError,
   AccountUnderReviewError,
   AgeRestrictedError,
   CaptchaRequiredError,
   IdentityVerificationRequired,
   OutOfLikesError,
+  LimitOfLikesError,
   ProfileVerificationError,
   RanOutOfLikesError,
 } from "./errors";
@@ -52,9 +58,8 @@ export default class TinderPage {
     // if (this.options.disableImages) {
     browserOptions.push("--blink-settings=imagesEnabled=false");
     console.log(this.job.jobType);
-    // }
-    // let apiToken =
-    //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MmZkN2M0YzYzODJiMTg4Njg0MTM0NjAifQ.phVgL2B0iy3vJde4ku7k0xcZTXXkvxNeJz-HnRIU-VY";
+    console.log(this.job.apiToken)
+
     this.GL = new GoLogin({
       autoUpdateBrowser: true,
       token: this.options.apiToken,
@@ -68,9 +73,12 @@ export default class TinderPage {
       try {
         const { status, wsUrl } = await this.GL.start();
         url = wsUrl.toString();
-      } catch (e) {
-        console.log(e);
-        await connectGL();
+      } catch (e: any) {
+        console.log(e)
+        await this.stop();
+        await delay(1000);
+        await updateSwipeJobWithPending(this.job.jobID);
+        process.exit(0);
       }
     };
 
@@ -84,20 +92,20 @@ export default class TinderPage {
     let pages = await context.pages();
     const vis_results = await Promise.all(
       pages.map(async (p, index) => {
-        // if (pages.length - 1 === index) {
-        //   tlog("don't close tinder.com page");
-        //   // this.page = p;
-        //   return;
-        // }
-        // tlog("closing tinder.com page");
+        if (pages.length - 1 === index) {
+          tlog("don't close tinder.com page");
+          this.page = p;
+          return;
+        }
+        tlog("closing tinder.com page");
         p.close();
       })
     );
 
-    this.page = await context.newPage();
-    await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
-    this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
-    this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
+    // this.page = await context.newPage();
+    // await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
+    // this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
+    // this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
     // await this.page.route("**", (route) => route.continue());
     // await this.page.route("**/*.{png,jpg,jpeg}", (route) => route.abort());
     // this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
@@ -122,15 +130,16 @@ export default class TinderPage {
       const resJson = await response.json();
       let parsed = await saveJson(this.job.jobID, JSON.stringify(resJson));
       console.log(parsed);
+      const cookies = await this.page.context().cookies();
+      await saveCookie(this.job.jobID, cookies);
+      
       if (parsed) {
         this.job.profile = parsed;
         if (!parsed.gold) {
           // await this.page.close();
           // await this.browserContext.close();
-          stop();
-          delay(1000);
-          await updateSwipeJobWithPending(this.job.jobID);
-          process.exit(0);
+          await updateSwipeJobWithNoGold(this.job.jobID);
+          await updateTinderAccountWithNoGold(this.job.tinderAccountID);
         }
       }
       this.savedProfile = true;
@@ -146,42 +155,26 @@ export default class TinderPage {
         return;
       }
       if (retry === 1 && !this.savedProfile) {
-        if (error.name === "AccountLoggedOutError") {
+        if (error.name === "AccountLoggedOutError" || this.page.url() == "https://tinder.com/") {
           throw new AccountLoggedOutError();
           return;
         }
       }
-      // //@ts-ignore
-      // if (retry === 2 && error.name === "TimeoutError") {
-      //   tlog("Responding gologin----timeout");
-      //   await this.page.close();
-      //   await this.browserContext.close();
-      // }
+      
       if (
         !this.savedProfile &&
         retry >= 1 &&
         (this.page.url().includes("/app/recs") || this.page.url().includes("/app/likes-you"))
       ) {
+        this.checkAndHandleErrors()
         //check responding
-        delay(10 * 60 * 1000);
-        tlog("Responding gologin");
-        // switch (this.job.jobType) {
-        //   case "likes":
-        //     await this.navigateToLikesPage();
-        //     break;
-        //   case "recommended":
-        //     await this.navigateToRecsPage();
-        //     break;
-        //   case "status_check":
-        //     await this.navigateToRecsPage();
-        //     break;
-        //   default:
-        //     throw new Error("unknown job type");
-        // }
-        stop();
-        delay(1000);
-        await updateSwipeJobWithPending(this.job.jobID);
-        process.exit(0);
+        if (error.name === 'TimeoutError') {
+          tlog("Responding gologin");
+          await this.stop();
+          await delay(1000);
+          await updateSwipeJobWithPending(this.job.jobID);
+          process.exit(0);
+        }
         // await this.page.close();
         // await this.browserContext.close();
       }
@@ -283,7 +276,11 @@ export default class TinderPage {
     }
 
     if (url == "https://tinder.com/") {
-      throw new AccountLoggedOutError();
+      // throw new AccountLoggedOutError();
+      const deserializedCookies = loadCookie(this.job.jobID);
+      await this.page.context().addCookies(deserializedCookies)
+      await this.navigateToLikesPage();
+      return;
     }
     await this.handleErrorPopup(); // move to check and handle errors
     await this.checkAccountUnderReview();
@@ -305,8 +302,8 @@ export default class TinderPage {
       tlog(`Doesn't find out the element in checkBootingUp`);
       if (url.includes("app/likes-you") || url.includes("app/matches")) {
         // await this.navigateToLikesPage();
-        stop();
-        delay(1000);
+        await this.stop();
+        await delay(1000);
         await updateSwipeJobWithPending(this.job.jobID);
         process.exit(0);
       }
@@ -318,6 +315,9 @@ export default class TinderPage {
     console.log("connecting.................", isConnected);
     if (await this.checkOutOfLikes()) {
       throw new OutOfLikesError();
+    }
+    if (await this.checkLimitOfLikes()) {
+      throw new LimitOfLikesError();
     }
   }
 
@@ -331,6 +331,28 @@ export default class TinderPage {
       }
     });
     return likesPageOutOfLikes;
+  }
+
+  async checkLimitOfLikes() {
+    const isConnected = this.browser.isConnected();
+    console.log("connecting..........checklimitoflikes.......", isConnected);
+    try {
+      await delay(500);
+      let likeContainer = await this.page.$('div#u-2048706955');
+      if (likeContainer) {
+        const allH3Els = await likeContainer.$$('h3');
+        for (var h3 of allH3Els) {
+          const h3Text = await h3?.innerHTML();
+          if (h3Text && h3Text.toLowerCase().includes('out of like')) {
+            return true;
+          }
+        }
+      }
+    } catch(e) {
+      tlog(e)
+      return false;
+    }
+    return false;
   }
 
   async checkBoostingUp() {
@@ -358,7 +380,6 @@ export default class TinderPage {
       let any = false;
       if (h3s != null) {
         h3s.forEach((e) => {
-          console.log((e as HTMLElement).innerText);
           if ((e as HTMLElement).innerText.toLowerCase() == "your account is under review") {
             any = true;
           }
@@ -473,8 +494,8 @@ export default class TinderPage {
     console.log(currentUrl, "**current url**");
     await this.checkAndHandleErrors();
     if (!currentUrl.includes("tinder.com/app/settings/plus/passport")) {
-      stop();
-      delay(1000);
+      await this.stop();
+      await delay(1000);
       await updateSwipeJobWithPending(this.job.jobID);
       process.exit(0);
     }
@@ -485,25 +506,6 @@ export default class TinderPage {
     tlog("navigating to likes-you");
     this.desiredURL = "https://tinder.com/app/likes-you";
 
-    // await this.page.setViewportSize({ width: 1024, height: 768 });
-    // await this.page.route(/(\.png$)|(\.jpg$)/, (route) => route.abort());
-    // this.page = await this.browserContext.newPage();
-    // let pages = this.browserContext.pages();
-    // const vis_results = await Promise.all(
-    //   pages.map(async (p: any, index: number) => {
-    //     if (pages.length - 1 === index) {
-    //       this.page = p;
-    //       return;
-    //     }
-    //     tlog("closing tinder.com page");
-    //     p.close();
-    //   })
-    // );
-    //added
-    // await this.page.route("**/*.{png,jpg,jpeg,gif,mov, mp4, avi,ogg,swf,webm}", (route) => route.abort());
-    // this.page.setDefaultNavigationTimeout(DEFAULT_TIMEOUT);
-    // this.page.setDefaultTimeout(DEFAULT_TIMEOUT);
-    ////
     await Promise.all([
       this.page.goto(this.desiredURL, { waitUntil: "networkidle", timeout: DEFAULT_TIMEOUT }),
       this.checkGoldProfile(),
@@ -522,8 +524,8 @@ export default class TinderPage {
         tlog(`Doesn't find out the element in goLikesYouPage`);
         // await this.navigateToLikesPage();
         // return;
-        stop();
-        delay(1000);
+        await this.stop();
+        await delay(1000);
         await updateSwipeJobWithPending(this.job.jobID);
         process.exit(0);
       }
@@ -572,7 +574,6 @@ export default class TinderPage {
     try {
       tlog("start queryLikes");
       let likes = await this.page.waitForSelector("main .Expand nav span", { timeout: 1000 * 60 * 1 });
-      tlog(await likes.innerText());
       let likesNumber = (await likes.innerText()).replace(/[^.\d]/g, "");
       tlog(`likes is ${likesNumber}`);
       const resultNum = likesNumber ? parseInt(likesNumber) : null;
@@ -594,7 +595,6 @@ export default class TinderPage {
       const matchesTab = await this.page.waitForSelector("div[role=tablist] > div > button", {
         timeout: 1000 * 60 * 1,
       });
-      console.log(await matchesTab.innerText(), "^^^^^^^^^^^^^^^^^^^^");
       await matchesTab.click();
       const likesItem = await this.page.waitForSelector('a.matchListItem[href^="/app/likes-you"]', {
         timeout: 1000 * 60 * 1,
@@ -779,14 +779,16 @@ export default class TinderPage {
       const likesYouCard = await this.page.waitForSelector('[data-testid="likesYouCard"] div', {
         timeout: 1000 * 60 * 1,
       });
-      const likesYouCard1 = this.page.locator(`[data-testid="likesYouCard"] >> nth=${getRandom(0, 3)}`);
+      const cards = await this.page.$$(`[data-testid="likesYouCard"]`);
+      var limitSwipe = 6;
+      if (cards.length < limitSwipe)
+        limitSwipe = cards.length;
+      const likesYouCard1 = this.page.locator(`[data-testid="likesYouCard"] >> nth=${getRandom(0, limitSwipe - 1)}`);
 
       let boundingBox;
-      console.log("likesYouCard Element");
       // TODO handle null case
       if (likesYouCard1) {
         boundingBox = await likesYouCard1.boundingBox();
-        console.log(boundingBox, "got likeyou");
         if (boundingBox) {
           await this.page.mouse.move(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
           await this.page.mouse.down();
