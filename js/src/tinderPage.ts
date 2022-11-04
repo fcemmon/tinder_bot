@@ -59,7 +59,9 @@ export default class TinderPage {
     browserOptions.push("--blink-settings=imagesEnabled=false");
     console.log(this.job.jobType);
     console.log(this.job.apiToken)
-
+    // }
+    // let apiToken =
+    //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MmZkN2M0YzYzODJiMTg4Njg0MTM0NjAifQ.phVgL2B0iy3vJde4ku7k0xcZTXXkvxNeJz-HnRIU-VY";
     this.GL = new GoLogin({
       autoUpdateBrowser: true,
       token: this.options.apiToken,
@@ -338,14 +340,11 @@ export default class TinderPage {
     console.log("connecting..........checklimitoflikes.......", isConnected);
     try {
       await delay(500);
-      let likeContainer = await this.page.$('div#u-2048706955');
-      if (likeContainer) {
-        const allH3Els = await likeContainer.$$('h3');
-        for (var h3 of allH3Els) {
-          const h3Text = await h3?.innerHTML();
-          if (h3Text && h3Text.toLowerCase().includes('out of like')) {
-            return true;
-          }
+      const allH3Els = await this.page.$$('h3');
+      for (var h3 of allH3Els) {
+        const h3Text = await h3?.innerHTML();
+        if (h3Text && h3Text.toLowerCase().includes('out of like')) {
+          return true;
         }
       }
     } catch(e) {

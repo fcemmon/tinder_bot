@@ -550,19 +550,19 @@ export class SwipeJob {
       await this.updateAccountStatus(status);
       if (status === "limit_of_likes") {
         query = `
-        update swipe_jobs,
-        scheduled_at=timezone('utc', now() + '12 hours'),
-        job_type='limit_of_likes',
-        completed_at=timezone('utc', now()),
-        account_job_status_result='${status ?? "at"}'
-        where id = ${this.jobID}`;
+          update swipe_jobs
+          set status='completed',
+          scheduled_at=timezone('utc', now() + '12 hours'),
+          job_type='limit_of_likes',
+          completed_at=timezone('utc', now()),
+          where id = ${this.jobID}`;            
       } else {
         query = `
-        update swipe_jobs
-        set status='completed',
-        completed_at=timezone('utc', now()),
-        account_job_status_result='${status ?? "at"}'
-        where id = ${this.jobID}`;
+          update swipe_jobs
+          set status='completed',
+          completed_at=timezone('utc', now()),
+          account_job_status_result='${status ?? "at"}'
+          where id = ${this.jobID}`;
       }
 
       query2 = `
@@ -583,7 +583,7 @@ export class SwipeJob {
         set status='completed',
         completed_at=timezone('utc', now()),
         failed_reason='${status}'
-        where id = ${this.jobID}`;
+        where id = ${this.runID}`;
     }
 
     await this.runQuery(query, []);
@@ -845,14 +845,16 @@ export class SwipeJob {
           await this.tp.navigateToRecsPage();
         }
       }
-      const random = Math.random();
-      
-      await this.tp.checkAndHandleErrors();
-      try {
-        await this.tp.waitForGamepadLikes();
-      } catch (e) {
+
+      if (i % 4 == 0) {
         await this.tp.checkAndHandleErrors();
+        try {
+          await this.tp.waitForGamepadLikes();
+        } catch (e) {
+          await this.tp.checkAndHandleErrors();
+        }
       }
+      const random = Math.random();
 
       if (random >= 1 - this.recSwipePercentage / 100) {
         likeCounter += 1;
