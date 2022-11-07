@@ -877,8 +877,8 @@ export class SwipeJob {
         }
       }
       await this.incrementJobSwipes();
-      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
-      await delay(2000);
+      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
+      await delay(100);
     }
   }
   
@@ -937,7 +937,7 @@ export class SwipeJob {
         }
       }
       await this.incrementJobSwipes();
-      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
+      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
     }
   }
 
@@ -985,7 +985,7 @@ export class SwipeJob {
         }
       }
       await this.incrementJobSwipes();
-      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 1000);
+      await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
     }
   }
 }
