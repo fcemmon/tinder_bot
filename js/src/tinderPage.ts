@@ -58,7 +58,6 @@ export default class TinderPage {
     // if (this.options.disableImages) {
     browserOptions.push("--blink-settings=imagesEnabled=false");
     console.log(this.job.jobType);
-    console.log(this.job.apiToken)
     // }
     // let apiToken =
     //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MmZkN2M0YzYzODJiMTg4Njg0MTM0NjAifQ.phVgL2B0iy3vJde4ku7k0xcZTXXkvxNeJz-HnRIU-VY";
@@ -321,6 +320,64 @@ export default class TinderPage {
     if (await this.checkLimitOfLikes()) {
       throw new LimitOfLikesError();
     }
+  }
+
+  async checkUpgradeLikeDialog2() {
+
+  }
+
+  async checkUpgradeLikeDialog() {
+    const isConnected = this.browser.isConnected();
+    console.log("connecting..........checkupgradelikes.......", isConnected);
+    try {
+      await delay(500);
+      const allH3Els = await this.page.$$('h3');
+      for (var h3 of allH3Els) {
+        const h3Text = await h3?.innerHTML();
+        if (h3Text && h3Text.toLowerCase().includes('upgrade your like')) {
+          const closeButton = this.page.locator('span:has-text("No Thanks")');
+          if (closeButton) {
+            const boundingBox = await closeButton.boundingBox();
+            if (boundingBox) {
+              await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+              return true;
+            }
+          }
+          return true;
+        }
+      }
+    } catch(e) {
+      tlog(e)
+      return false;
+    }
+    return false;
+  }
+
+  async checkMatchesDialog() {
+    const isConnected = this.browser.isConnected();
+    console.log("connecting..........checkMatchesPage.......", isConnected);
+    try {
+      await delay(500);
+      var matchesAlert = await this.page.$(`div[title="${"It's a Match!™"}"]`);
+      if (!matchesAlert)
+        matchesAlert = await this.page.$(`div[title="${"It's a Match!"}"]`);
+      if (!matchesAlert)
+         matchesAlert = await this.page.$(`div[title="${"It’s a match!™"}"]`);
+      if (matchesAlert) {
+        const closeButton = this.page.locator('button[title="Back to Tinder"]');
+        if (closeButton) {
+          const boundingBox = await closeButton.boundingBox();
+          if (boundingBox) {
+            await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+            return true;
+          }
+        }
+      }
+    } catch(e) {
+      tlog(e)
+      return false;
+    }
+    return false;
   }
 
   async checkOutOfLikes() {
@@ -742,6 +799,34 @@ export default class TinderPage {
       }
       return false;
     });
+  }
+
+  async clickViewProfile() {
+    tlog('waiting for profile view');
+    await delay(500);
+    const openProfileButton = await this.page.locator('span:has-text("Open profile") >> nth=0');
+    if (openProfileButton) {
+      var boundingBox = await openProfileButton.boundingBox();
+      if (boundingBox) {
+        await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+        await delay(2000);
+        const nextButtons = await this.page.$$('button.bullet');
+        const swipeImageNumbers = getRandom(2, 4);
+        const count = nextButtons.length >= swipeImageNumbers ?  swipeImageNumbers : nextButtons.length;
+        
+        for (var i = 1; i < count; i ++) {
+          const nextButton = await this.page.locator('button.bullet >> nth=' + i);
+          if (nextButton) {
+            boundingBox = await nextButton.boundingBox();
+            if (boundingBox) {
+              await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+            }
+          }
+          await delay(2000);
+        }
+        return true;
+      }
+    }
   }
 
   // actions
