@@ -3,8 +3,8 @@ const GoLogin = require("gologin");
 
 (async () => {
   const GL = new GoLogin({
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MzViNDNmYzYyMzI4NjljYjIwNjA0NDcifQ.a5qEZGDbA1pHWgxih1iqM-Z8ea1tDzBiRcEqFbHXLSo',
-    profile_id: '63350bb8a7cdb59075c793fa',
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjczMzJkMTc5ZTUwYTUyZTIwODI4ODQiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2MzVhYWJjYTY4OTJlZjgzOTZmMDkzZWEifQ.Ktxv-3IfcNWOY8tR9QdEmpypiTLDgkXSaA6k_gqAK9o',
+        profile_id: '63367c3b33c0e416f5bd1136',
     skipOrbitaHashChecking: true,
   });
 

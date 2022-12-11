@@ -741,20 +741,18 @@ export class SwipeJob {
       } else {
         startSwipesCount = endSwipesCount;
       }
-    }, 1000 * 60 * 3);
+    }, 1000 * 60 * 10);
 
-    if (isAwSnap) {
-    }
     for (let i = 1; i <= this.swipes; i++) {
       tlog(`count the swipe ${i}..........................................`);
       const currentPageUrl = this.tp.getURL();
       if (i % 100 === 0) {
-        await delay(2000);
+        await delay(1000);
         if (this.tp.page !== undefined) {
           await this.tp.navigateToLikesPage();
         }
       }
-
+      await this.tp.checkAndHandleErrors();
       if (i % 10 === 0) {
         const likeCount = await this.tp.queryLikes();
         if (likeCount && likeCount === -1) {
@@ -840,28 +838,41 @@ export class SwipeJob {
     let passCounter = 0;
     let viewProfileCounter = 0;
     let viewProfileCycle = getRandom(3, 7);
+    let startSwipesCount = 0;
+    let endSwipesCount = 0;
+    let isAwSnap = false;
+    const intervalId = setInterval(async () => {
+      console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
+      if (startSwipesCount === endSwipesCount) {
+        clearInterval(intervalId);
+        await this.tp.stop();
+        await delay(1000);
+        await this.updateSwipeJobToPending();
+        process.exit(0);
+      } else {
+        startSwipesCount = endSwipesCount;
+      }
+    }, 1000 * 60 * 10);
+
     for (let i = 1; i <= this.swipes; i++) {
       viewProfileCounter += 1;
       if (i % 100 === 0) {
-        await delay(2000);
+        await delay(1000);
         if (this.tp.page !== undefined) {
           await this.tp.navigateToRecsPage();
         }
       }
 
+      await this.tp.checkAndHandleErrors();
+
       if (i % 4 == 0) {
-        await this.tp.checkAndHandleErrors();
-        try {
-          await this.tp.waitForGamepadLikes();
-        } catch (e) {
-          await this.tp.checkAndHandleErrors();
-        }
+        await this.tp.waitForGamepadLikes();
       }
 
       await this.tp.checkMatchesDialog();
       await this.tp.checkUpgradeLikeDialog();
 
-      await delay(1000);
+      await delay(500);
 
       const random = Math.random();
 
@@ -874,6 +885,7 @@ export class SwipeJob {
       if (random >= 1 - this.recSwipePercentage / 100) {
         likeCounter += 1;
         await this.tp.clickLike();
+        await this.incrementJobSwipes();
       } else {
         passCounter += 1;
         await this.tp.clickPass();
@@ -892,9 +904,10 @@ export class SwipeJob {
           await this.markJobRunning();
         }
       }
-      await this.incrementJobSwipes();
+
       await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
       await delay(100);
+      endSwipesCount = i;
     }
   }
   
@@ -917,12 +930,29 @@ export class SwipeJob {
     let passCounter = 0;
     let viewProfileCounter = 0;
     let viewProfileCycle = getRandom(3, 7);
+
+    let startSwipesCount = 0;
+    let endSwipesCount = 0;
+    let isAwSnap = false;
+    const intervalId = setInterval(async () => {
+      console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
+      if (startSwipesCount === endSwipesCount) {
+        clearInterval(intervalId);
+        await this.tp.stop();
+        await delay(1000);
+        await this.updateSwipeJobToPending();
+        process.exit(0);
+      } else {
+        startSwipesCount = endSwipesCount;
+      }
+    }, 1000 * 60 * 10);
+
     // await this.tp.checkAndHandleErrors();
     for await (const x of Array(this.swipes)) {
       viewProfileCounter += 1;
       i = i + 1;
       if (i % 100 === 0) {
-        await delay(2000);
+        await delay(1000);
         if (this.tp.page !== undefined) {
           await this.tp.navigateToRecsPage();
         }
@@ -930,11 +960,7 @@ export class SwipeJob {
       await this.tp.checkAndHandleErrors();
       
       const random = Math.random();
-      try {
-        await this.tp.waitForGamepadLikes();
-      } catch (e) {
-        await this.tp.checkAndHandleErrors();
-      }
+      await this.tp.waitForGamepadLikes();
 
       await this.tp.checkMatchesDialog();
       await this.tp.checkUpgradeLikeDialog();
@@ -948,6 +974,7 @@ export class SwipeJob {
       if (random >= 1 - this.recSwipePercentage / 100) {
         likeCounter += 1;
         await this.tp.clickLike();
+        await this.incrementJobSwipes();
       } else {
         passCounter += 1;
         await this.tp.clickPass();
@@ -965,8 +992,9 @@ export class SwipeJob {
           await this.markJobRunning();
         }
       }
-      await this.incrementJobSwipes();
+      
       await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
+      endSwipesCount = i;
     }
   }
 
@@ -978,12 +1006,29 @@ export class SwipeJob {
     let passCounter = 0;
     let viewProfileCounter = 0;
     let viewProfileCycle = getRandom(3, 7);
+
+    let startSwipesCount = 0;
+    let endSwipesCount = 0;
+    let isAwSnap = false;
+    const intervalId = setInterval(async () => {
+      console.log("^^^^^^^^^^^^", startSwipesCount, endSwipesCount);
+      if (startSwipesCount === endSwipesCount) {
+        clearInterval(intervalId);
+        await this.tp.stop();
+        await delay(1000);
+        await this.updateSwipeJobToPending();
+        process.exit(0);
+      } else {
+        startSwipesCount = endSwipesCount;
+      }
+    }, 1000 * 60 * 10);
+
     // await this.tp.checkAndHandleErrors();
     for await (const x of Array(this.swipes)) {
       i = i + 1;
       viewProfileCounter += 1;
       if (i % 100 === 0) {
-        await delay(2000);
+        await delay(1000);
         if (this.tp.page !== undefined) {
           await this.tp.navigateToRecsPage();
         }
@@ -993,11 +1038,7 @@ export class SwipeJob {
       await this.tp.checkUpgradeLikeDialog();
 
       const random = Math.random();
-      try {
-        await this.tp.waitForGamepadLikes();
-      } catch (e) {
-        await this.tp.checkAndHandleErrors();
-      }
+      await this.tp.waitForGamepadLikes();
 
       if (viewProfileCounter === viewProfileCycle) {
         viewProfileCounter = 0;
@@ -1008,6 +1049,7 @@ export class SwipeJob {
       if (random >= 1 - this.recSwipePercentage / 100) {
         likeCounter += 1;
         await this.tp.clickLike();
+        await this.incrementJobSwipes();
       } else {
         passCounter += 1;
         await this.tp.clickPass();
@@ -1025,8 +1067,9 @@ export class SwipeJob {
           await this.markJobRunning();
         }
       }
-      await this.incrementJobSwipes();
+
       await delayWithFunction(this.insertMatch.bind(this), await this.getSwipeDelay(), 200);
+      endSwipesCount = i;
     }
   }
 }

@@ -24,6 +24,8 @@
     "node-storage": "^0.0.9",
     "nodemon": "^2.0.8",
     "pg": "^8.7.3",
-    "puppeteer-core": "^16.0.0"
+    "process-list": "^2.0.0",
+    "puppeteer-core": "^16.0.0",
+    "win-control": "^0.3.1"
   }
 }

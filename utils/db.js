@@ -2,15 +2,17 @@ const { Client } = require("pg");
 const moment = require("moment");
 const Storage = require("node-storage");
 const store = new Storage("utils/metadata.json");
+const ip = process.env.IP_ADDRESS
+
 const getDBClient = async () => {
   let client = new Client({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    // ssl: {
-    //   rejectUnauthorized: false,
-    // },
+    ssl: {
+      rejectUnauthorized: false,
+    },
   });
 
   await client.connect();
@@ -28,45 +30,29 @@ const runQuery = async (query, values) => {
   return res;
 };
 
-const getJobIds = async (count) => {
-  if (count !== 0 && count % 60 === 0) {
-    store.remove("prevData");
-  }
+const getJobIds = async () => {
+  try {
+    const query = `
+  select swipe_jobs.id, vps_infos.ip  from swipe_jobs join vps_infos on swipe_jobs.vps_info_id = vps_infos.id where status = 'pending' and ip = $1`;
+    const { rows } = await runQuery(query, [ip]);
+    var jobIds = [];
+    const result = rows?.map((r) => {
+      jobIds.push({ id: r.id, delay: r.delay });
+      return r;
+    });
 
-  const query = `
-  select * from swipe_jobs where status = 'pending'`;
-  const { rows } = await runQuery(query, []);
-  let jobIds = [];
-  const result = rows?.map((r) => {
-    jobIds.push({ id: r.id, delay: r.delay });
-    return r;
-  });
+    console.log(result)
 
-  const prevData = store.get("prevData");
-  let newJobIds = [];
-  if (jobIds.length > 0) {
-    if (prevData && prevData.length > 0) {
-      // console.log(prevData, "preData");
-      // console.log(jobIds, "jobIds");
-      newJobIds = jobIds.filter((jIdObj) => !prevData.some((pv) => pv.id === jIdObj.id));
-    } else {
-      console.log("No prevData");
-      newJobIds = jobIds;
+    if (jobIds.length > 3) {
+      jobIds = jobIds.filter((obj, index) => index < 3);
     }
-  } else {
-    newJobIds = jobIds;
-  }
+    // console.log(newJobIds, "newJobIds");
 
-  if (newJobIds.length > 3) {
-    newJobIds = newJobIds.filter((obj, index) => index < 3);
+    return jobIds;
+  } catch(e) {
+    console.log(e)
+    return []
   }
-  // console.log(newJobIds, "newJobIds");
-
-  if (newJobIds.length > 0) {
-    store.put("prevData", [...(prevData ?? []), ...newJobIds]);
-  }
-
-  return newJobIds;
 };
 
 module.exports = { getJobIds };
